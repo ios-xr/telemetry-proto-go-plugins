@@ -70,6 +70,15 @@ def extractMsgName(filename):
                 return m.group(1), m.group(1)[:-len("_KEYS")]
     return None, None
 
+def generatePluginAllContent(srcfilename, tgt, f, pl):
+    k, c = extractMsgName(srcfilename)
+    if k is None:
+        print("skiping plugin build for {}".format(f))
+        return
+    pkg_name = extractPackageName(srcfilename)
+    pl.append((tgt, pkg_name.split(' ', 1)[1], toCamelCase(k), toCamelCase(c)))
+
+
 def generatePluginGoCode(srcfilename, tgt, f):
     """
     Generate plugin main and build instrustion
@@ -81,6 +90,7 @@ def generatePluginGoCode(srcfilename, tgt, f):
     if k is None:
         print("skiping plugin build for {}".format(f))
         return
+
     pluginFileName = pluginDir + "/" + f.rsplit('.', 1)[0] + ".plugin.go"
 
     pluginContent = """
@@ -127,6 +137,8 @@ if __name__ == "__main__":
     # Switch
     parser.add_argument('--plugin', action='store_true',
                             help='build plugin libraries as well')
+    parser.add_argument('--pluginAll', type=str,
+                            help='build one plugin library which includes all proto symbols')
     args = parser.parse_args()
 
     if args.src:
@@ -139,6 +151,7 @@ if __name__ == "__main__":
     if args.plugin:
         print("Target directory for plugins {}".format(TGTDIR))
 
+    pluginSymList = []
     count = 0
     print("Soft links to protos and adding 'go generate' directive in gen.go...")
     l = createProtolist()
@@ -193,19 +206,52 @@ if __name__ == "__main__":
 
         if args.plugin:
             generatePluginGoCode(srcfilename, tgt, f)
+        if args.pluginAll:
+            generatePluginAllContent(srcfilename, tgt, f, pluginSymList)
+
+    if args.pluginAll:
+        print("Generating plugin.go file...")
+        pluginContent = """
+//go:generate go build -buildmode=plugin -o {} plugin.go
+
+package main
+
+import (
+""".format(args.pluginAll)
+
+        with open("plugin.go", "w") as p:
+            p.write(pluginContent)
+            for a, b, c, d in pluginSymList:
+                import_line = """
+      "./{}" """.format(a)
+                p.write(import_line)
+
+            p.write("""
+)
+""")
+            for a, b, c, d in pluginSymList:
+                l = """var KEYS_{} {}.{}
+var CONTENT_{} {}.{}
+""".format(b, b, c, b, b, d)
+                p.write(l)
+
 
     print("Generating golang bindings for {} .proto files. This stage takes some time...".format(count))
     try:
         subprocess.check_call(["go", "generate", "./..."])
     except subprocess.CalledProcessError as e:
-        print("'go generate' interprets .proto and builds go binding")
-        print(" *** STAGE DID NOT RUN CLEAN. ERROR MESSAGE ABOVE. COMMON PROBLEMS BELOW ***")
-        print(" GOROOT must be set to where golang is installed, minimum version go1.7 to run tests")
-        print(" GOPATH must be workspace root")
-        print(" Guidelines here: https://golang.org/doc/code.html")
-        print(" protoc-gen-go must be in PATH (https://github.com/golang/protobuf)")
-        print(" protoc must be in PATH")
-        print(" go get -u github.com/golang/protobuf/{proto,protoc-gen-go}")
-        print(e)
+        try:
+            print("Retrying the generation...\n")
+            subprocess.check_call(["go", "generate", "./..."])
+        except subprocess.CalledProcessError as e:
+            print("'go generate' interprets .proto and builds go binding")
+            print(" *** STAGE DID NOT RUN CLEAN. ERROR MESSAGE ABOVE. COMMON PROBLEMS BELOW ***")
+            print(" GOROOT must be set to where golang is installed, minimum version go1.7 to run tests")
+            print(" GOPATH must be workspace root")
+            print(" Guidelines here: https://golang.org/doc/code.html")
+            print(" protoc-gen-go must be in PATH (https://github.com/golang/protobuf)")
+            print(" protoc must be in PATH")
+            print(" go get -u github.com/golang/protobuf/{proto,protoc-gen-go}")
+            print(e)
 
     print("Done.")

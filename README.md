@@ -1,18 +1,18 @@
 
 # IOS XR Telemetry Proto Plugins
 
-This repository contains "Go" plugins generated from IOS-XR protos at
-[model-driven-telemetry](https://github.com/ios-xr/model-driven-telemetry). Go
-plugins are like shared libraries that can be loaded dynamically into
-Go executable. They will have to be built using the same version that the
-executable is built with. Collectors can load these plugins
-dynamically as needed to decode/unmarshal compact GPB
-message.
+This repository contains script that can be used to generate 'Go'
+binding for the IOS-XR telemetry protos at
+[model-driven-telemetry](https://github.com/ios-xr/model-driven-telemetry).
+Same script can be used to generate 'Go' plugins that can be used with
+the go collector to decode gpb messages. Go plugins are like shared
+libraries that can be loaded dynamically into Go executable. They will
+have to be built using the same version that the executable is built
+with. Collectors can load these plugins dynamically as needed to
+decode/unmarshal compact GPB message.
 
-There is a script available to generate Go bindings from the protos and
-generate plugins from the bindings. Usage instructions for the
-script as well as how plugins can be used with the collector are
-specified below.
+Usage instructions for the script as well as how plugins can be used
+with the collector are specified below.
 
 ## Go bindings generation
 
@@ -42,16 +42,48 @@ libprotoc 3.7.0
 
 ## Script usage:  
 ```
+> ./prep_golang.py -h
+usage: prep_golang.py [-h] [--src SRC] [--dst DST] [--plugin]
+                      [--pluginAll PLUGINALL]
+
+Generate go bindings and go plugins for proto files
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --src SRC             Source directory to look for protos relative to
+                        current directory, default: staging
+  --dst DST             Target directory generated bindings are placed
+                        relative to current directory, default: proto_go
+  --plugin              build plugin libraries as well
+  --pluginAll PLUGINALL
+                        build one plugin library which includes all proto
+                        symbols
+>
+```
+Generate only go bindings,  
+```
+./prep_golang.py --src ../ios-xr/model-driven-telemetry/protos/65x --dst proto_go/65x
+```
+There are couple of ways for generating the plugins, generate per
+proto plugin or one plugin for all the protos.
+For generating one plugin for all protos for any release:
+```
+./prep_golang.py --src <relative-path-to-protos> --dst <relative path to destination directory> --pluginAll <plugin.so>
+```
+**Example:**  
+Generate plugins for r65x protos,  
+```
+./prep_golang.py --src ../ios-xr/model-driven-telemetry/protos/65x --dst proto_go/65x --pluginAll plugin_65x.so
+```
+
+For generating per proto plugins:
+```
 ./prep_golang.py --src <relative-path-to-protos> --dst <relative path to destination directory> --plugin
 ```
 **Example:**  
 Generate plugins for r65x protos,  
 ```
 ./prep_golang.py --src ../ios-xr/model-driven-telemetry/protos/65x --dst proto_go/65x --plugin
-```
-Generate only go bindings,  
-```
-./prep_golang.py --src ../ios-xr/model-driven-telemetry/protos/65x --dst proto_go/65x
 ```
 
 **Note:**
@@ -90,8 +122,6 @@ Collectors available at
 https://github.com/ios-xr/telemetry-go-collector can use plugins
 generated from this script to decode compact GPB encoded messages.
 
-Plugins already available in this repo can be used with the collectors without need to rebuild them.
-
 Use "go get" or "git clone" to get the repo:
 ```
 git clone https://github.com/ios-xr/telemetry-proto-go-plugins.git
@@ -101,7 +131,19 @@ or
 go get github.com/ios-xr/telemetry-proto-go-plugins
 ```
 
+If "--pluginAll" option is used to generate one plugin, use -plugin
+option in the collector to point to plugin file. It will load the
+plugin and use telemetry sensor path to lookup the symbols needed to
+decode the gpb message.
+If "--plugin" is used to generate per proto plugins, they are generated
+in same directory hirarchy as protos. Collector can load the plugins
+directly from this hirarchy, use -plugin_dir option when collector
+is started to point to directory.
 Usage example:
+```
+./bin/telemetry_dialin_collector -server <ip:port> -subscription <name> -encoding gpb -username <> -password <> -plugin telemetry-proto-go-plugins/plugin_66x.so
+```
+or
 ```
 ./bin/telemetry_dialin_collector -server <ip:port> -subscription <name> -encoding gpb -username <> -password <> -plugin_dir telemetry-proto-go-plugins/proto_go/66x
 ```
