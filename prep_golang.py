@@ -19,6 +19,8 @@ MSGKEYNAME="message (.*_KEYS)"
 
 GENGOPREFIX="{}/{}/".format(REPOROOT, TGTDIR)
 
+PLUGINALL_GOFILE="plugin.go"
+
 def walkTree(start):
     for root, dirs, files in os.walk(start):
         yield root, dirs, files
@@ -212,14 +214,12 @@ if __name__ == "__main__":
     if args.pluginAll:
         print("Generating plugin.go file...")
         pluginContent = """
-//go:generate go build -buildmode=plugin -o {} plugin.go
-
 package main
 
 import (
-""".format(args.pluginAll)
+"""
 
-        with open("plugin.go", "w") as p:
+        with open(PLUGINALL_GOFILE, "w") as p:
             p.write(pluginContent)
             for a, b, c, d in pluginSymList:
                 import_line = """
@@ -253,5 +253,10 @@ var CONTENT_{} {}.{}
             print(" protoc must be in PATH")
             print(" go get -u github.com/golang/protobuf/{proto,protoc-gen-go}")
             print(e)
+
+    if args.pluginAll:
+        print("Building the Go plugin...")
+        #pluginBuildCmd = """go build -buildmode=plugin -o {} plugin.go""".format(args.pluginAll)
+        subprocess.check_call(["go", "build", "-buildmode=plugin", "-o", args.pluginAll, PLUGINALL_GOFILE])
 
     print("Done.")
